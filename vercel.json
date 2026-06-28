@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "routes": [
     {
       "src": "/(.*)",
@@ -8,7 +7,7 @@
   ],
   "functions": {
     "main.py": {
-      "runtime": "python3.12"
+      "runtime": "@vercel/python"
     }
   }
 }
