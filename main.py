@@ -18,6 +18,9 @@ app = FastAPI(
 load_dotenv()
 HF_Token = os.getenv("HF_TOKEN")
 
+if not HF_Token:
+    print("⚠️ WARNING: 'HF_TOKEN' environment variable mein nahi mila! Apni .env file check karein.")
+
 client = InferenceClient(
     provider="fal-ai",
     api_key=HF_Token,
@@ -41,9 +44,14 @@ async def generate_image(request: ImageRequest):
         
         # Direct raw image binary wapis bhejna
         return Response(content=img_byte_arr, media_type="image/png")
-        
+          
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face Error: {str(e)}")    
+        # Saaf error message bhejne ke liye
+        error_msg = getattr(e, 'response', None) or str(e)
+        if hasattr(error_msg, 'text'):  # Agar response object ho to uska text uthein
+            error_msg = error_msg.text
+        raise HTTPException(status_code=500, detail=f"Hugging Face Error: {error_msg}")
 
 @app.get("/trends")
 def get_trends():
