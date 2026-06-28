@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Virtual Environment
 venv/
 env/
@@ -11,28 +10,15 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Environment variables
+# Environment variables (Crucial for security)
 .env
+.env.local
 
-# IDE
+# IDEs and Editors
 .vscode/
-=======
-# Virtual Environment
-venv/
-env/
-.venv/
-ENV/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Environment variables
-.env
-
-# IDE
-.vscode/
->>>>>>> master
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
