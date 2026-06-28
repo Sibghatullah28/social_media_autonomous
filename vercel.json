@@ -8,8 +8,7 @@
   ],
   "functions": {
     "main.py": {
-      "runtime": "python3.12",
-      "entrypoint": "app"
+      "runtime": "python3.12"
     }
   }
 }
