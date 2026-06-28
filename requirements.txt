@@ -7,3 +7,4 @@ huggingface_hub
 pydantic
 feedparser
 python-dotenv
+Pillow
