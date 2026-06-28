@@ -72,4 +72,4 @@ def get_trends():
         "total": len(trends),
         "data": trends
     }
->>>>>>> master
+
