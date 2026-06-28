@@ -6,6 +6,8 @@ import feedparser
 from fastapi.responses import Response
 from pydantic import BaseModel
 from huggingface_hub import InferenceClient
+import os
+from dotenv import load_dotenv
 
 app = FastAPI(
     title="Trend Service",
@@ -13,7 +15,8 @@ app = FastAPI(
     description="AI Trend Collection Service"
 )
 
-HF_Token="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"
+load_dotenv()
+HF_Token = os.getenv("HF_TOKEN")
 
 client = InferenceClient(
     provider="fal-ai",
