@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Virtual Environment
 venv/
 env/
@@ -15,4 +16,23 @@ __pycache__/
 
 # IDE
 .vscode/
+=======
+# Virtual Environment
+venv/
+env/
+.venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+>>>>>>> master
 .idea/
