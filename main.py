@@ -15,44 +15,6 @@ app = FastAPI(
     description="AI Trend Collection Service"
 )
 
-load_dotenv()
-HF_Token = os.getenv("HF_TOKEN")
-
-if not HF_Token:
-    print("⚠️ WARNING: 'HF_TOKEN' environment variable mein nahi mila! Apni .env file check karein.")
-
-client = InferenceClient(
-    provider="fal-ai",
-    api_key=HF_Token,
-)
-class ImageRequest(BaseModel):
-    prompt: str
-
-@app.post("/generate-image")
-async def generate_image(request: ImageRequest):
-    try:
-        # Hugging Face se FLUX.1-dev model ke zariye image generate karwana
-        image = client.text_to_image(
-            request.prompt,
-            model="black-forest-labs/FLUX.1-dev",
-        )
-        
-        # Image ko Bytes mein convert karna taake n8n isay as a file receive kar sake
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='PNG')
-        img_byte_arr = img_byte_arr.getvalue()
-        
-        # Direct raw image binary wapis bhejna
-        return Response(content=img_byte_arr, media_type="image/png")
-          
-
-    except Exception as e:
-        # Saaf error message bhejne ke liye
-        error_msg = getattr(e, 'response', None) or str(e)
-        if hasattr(error_msg, 'text'):  # Agar response object ho to uska text uthein
-            error_msg = error_msg.text
-        raise HTTPException(status_code=500, detail=f"Hugging Face Error: {error_msg}")
-
 @app.get("/trends")
 def get_trends():
 
@@ -83,4 +45,82 @@ def get_trends():
         "total": len(trends),
         "data": trends
     }
+
+class PostRequest(BaseModel):
+    text: str                   
+    platform: str = "x"          
+
+class PostResponse(BaseModel):
+    success: bool
+    message: str
+    posted_url: str = None
+    text: str
+
+
+@app.get("/verify-x")
+async def verify_x_credentials():
+    """Pehle credentials check karne ke liye"""
+    try:
+        client = tweepy.Client(
+            bearer_token=os.getenv("X_BEARER_TOKEN"),
+            consumer_key=os.getenv("X_CONSUMER_KEY"),
+            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+            access_token=os.getenv("X_ACCESS_TOKEN"),
+            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        )
+        
+        me = client.get_me()
+        return {
+            "status": "success",
+            "message": "✅ X Credentials Verified!",
+            "username": me.data.username
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Verification Failed: {str(e)}")
+
+
+
+@app.post("/publish", response_model=PostResponse)
+async def publish_to_x(request: PostRequest, background_tasks: BackgroundTasks):
+    """Text ko direct X pe post karega"""
+    
+    if not request.text or len(request.text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Post text cannot be empty")
+    
+    if len(request.text) > 280:
+        raise HTTPException(status_code=400, detail="Post text is too long (max 280 characters)")
+
+    # Background mein post karo taake response jaldi mile
+    background_tasks.add_task(publish_text_to_x, request.text)
+    
+    return PostResponse(
+        success=True,
+        message="Post is being published to X...",
+        text=request.text
+    )
+
+
+# ================== BACKGROUND FUNCTION ==================
+async def publish_text_to_x(text: str):
+    """Actual X pe post karne wala function"""
+    try:
+        client = tweepy.Client(
+            bearer_token=os.getenv("X_BEARER_TOKEN"),
+            consumer_key=os.getenv("X_CONSUMER_KEY"),
+            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+            access_token=os.getenv("X_ACCESS_TOKEN"),
+            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        )
+        
+        response = client.create_tweet(text=text.strip())
+        
+        post_id = response.data['id']
+        posted_url = f"https://x.com/i/web/status/{post_id}"
+        
+        print(f"✅ Posted successfully: {posted_url}")
+        return {"success": True, "posted_url": posted_url}
+        
+    except Exception as e:
+        print(f"❌ Posting failed: {e}")
+        return {"success": False, "error": str(e)}
 
