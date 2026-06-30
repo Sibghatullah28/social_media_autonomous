@@ -1,13 +1,16 @@
 
 import io
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException,BackgroundTasks
 import feedparser
 from fastapi.responses import Response
 from pydantic import BaseModel
 from huggingface_hub import InferenceClient
 import os
 from dotenv import load_dotenv
+import tweepy
+
+load_dotenv()
 
 app = FastAPI(
     title="Trend Service",
