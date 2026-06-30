@@ -1,23 +1,26 @@
-
-import io
-
-from fastapi import FastAPI, HTTPException,BackgroundTasks
-import feedparser
-from fastapi.responses import Response
-from pydantic import BaseModel
-from huggingface_hub import InferenceClient
 import os
+import feedparser
+import httpx
+import asyncio
+import logging
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel
 from dotenv import load_dotenv
-import tweepy
 
 load_dotenv()
 
 app = FastAPI(
     title="Trend Service",
     version="1.0.0",
-    description="AI Trend Collection Service"
+    description="AI Trend + Telegram Posting Service"
 )
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# =========================
+# TREND API (same as before)
+# =========================
 @app.get("/trends")
 def get_trends():
 
@@ -31,11 +34,9 @@ def get_trends():
     trends = []
 
     for source, url in feeds.items():
-
         feed = feedparser.parse(url)
 
         for entry in feed.entries[:5]:
-
             trends.append({
                 "source": source,
                 "title": entry.title,
@@ -49,81 +50,97 @@ def get_trends():
         "data": trends
     }
 
+
+# =========================
+# TELEGRAM CONFIG
+# =========================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+
+
+# =========================
+# REQUEST MODEL
+# =========================
 class PostRequest(BaseModel):
-    text: str                   
-    platform: str = "x"          
+    text: str
+    platform: str = "telegram"
+
 
 class PostResponse(BaseModel):
     success: bool
     message: str
-    posted_url: str = None
     text: str
 
 
-@app.get("/verify-x")
-async def verify_x_credentials():
-    """Pehle credentials check karne ke liye"""
-    try:
-        client = tweepy.Client(
-            bearer_token=os.getenv("X_BEARER_TOKEN"),
-            consumer_key=os.getenv("X_CONSUMER_KEY"),
-            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-            access_token=os.getenv("X_ACCESS_TOKEN"),
-            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
-        )
-        
-        me = client.get_me()
+# =========================
+# TELEGRAM VERIFY (simple test)
+# =========================
+@app.get("/verify-telegram")
+async def verify_telegram():
+
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=401, detail="BOT_TOKEN missing in .env")
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
+        data = res.json()
+
+        if not data.get("ok"):
+            raise HTTPException(status_code=401, detail="Invalid Bot Token")
+
         return {
             "status": "success",
-            "message": "✅ X Credentials Verified!",
-            "username": me.data.username
+            "bot": data["result"]
         }
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Verification Failed: {str(e)}")
 
 
-
+# =========================
+# POST TO TELEGRAM (FASTAPI)
+# =========================
 @app.post("/publish", response_model=PostResponse)
-async def publish_to_x(request: PostRequest, background_tasks: BackgroundTasks):
-    """Text ko direct X pe post karega"""
-    
-    if not request.text or len(request.text.strip()) == 0:
-        raise HTTPException(status_code=400, detail="Post text cannot be empty")
-    
-    if len(request.text) > 280:
-        raise HTTPException(status_code=400, detail="Post text is too long (max 280 characters)")
+async def publish_to_telegram(request: PostRequest, background_tasks: BackgroundTasks):
 
-    # Background mein post karo taake response jaldi mile
-    background_tasks.add_task(publish_text_to_x, request.text)
-    
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Post text cannot be empty")
+
+    if len(request.text) > 4096:
+        raise HTTPException(status_code=400, detail="Telegram message too long")
+
+    background_tasks.add_task(send_to_telegram, request.text)
+
     return PostResponse(
         success=True,
-        message="Post is being published to X...",
+        message="Post is being published to Telegram...",
         text=request.text
     )
 
 
-# ================== BACKGROUND FUNCTION ==================
-async def publish_text_to_x(text: str):
-    """Actual X pe post karne wala function"""
-    try:
-        client = tweepy.Client(
-            bearer_token=os.getenv("X_BEARER_TOKEN"),
-            consumer_key=os.getenv("X_CONSUMER_KEY"),
-            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-            access_token=os.getenv("X_ACCESS_TOKEN"),
-            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
-        )
-        
-        response = client.create_tweet(text=text.strip())
-        
-        post_id = response.data['id']
-        posted_url = f"https://x.com/i/web/status/{post_id}"
-        
-        print(f"✅ Posted successfully: {posted_url}")
-        return {"success": True, "posted_url": posted_url}
-        
-    except Exception as e:
-        print(f"❌ Posting failed: {e}")
-        return {"success": False, "error": str(e)}
+# =========================
+# ACTUAL TELEGRAM SENDER
+# =========================
+async def send_to_telegram(text: str):
 
+    if not BOT_TOKEN or not CHANNEL_ID:
+        logger.error("Missing BOT_TOKEN or CHANNEL_ID in .env")
+        return
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, data={
+                "chat_id": CHANNEL_ID,
+                "text": text,
+                "parse_mode": "HTML"
+            })
+
+            data = response.json()
+
+            if not data.get("ok"):
+                logger.error(f"Telegram Error: {data}")
+                return
+
+            logger.info(f"✅ Posted to Telegram: {data['result']['message_id']}")
+
+        except Exception as e:
+            logger.error(f"❌ Telegram posting failed: {str(e)}")

@@ -1,11 +1,8 @@
 
 fastapi
 uvicorn
-fastapi
-uvicorn
-huggingface_hub
 pydantic
 feedparser
 python-dotenv
-Pillow
-tweepy
+httpx
+asyncio
