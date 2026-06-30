@@ -8,3 +8,4 @@ pydantic
 feedparser
 python-dotenv
 Pillow
+tweepy
